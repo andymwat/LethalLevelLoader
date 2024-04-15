@@ -430,6 +430,33 @@ namespace LethalLevelLoader
                 __instance.currentNode = TerminalManager.moonsKeyword.specialKeywordResult;
         }
 
+        [HarmonyPatch(typeof(Terminal))]
+        public class Terminal_Patch
+        {
+            public static void MainPatch(Terminal __instance)
+            {
+                GatherAssets();
+            }
+        }
+
+        private static void GatherAssets()
+        {
+            DebugHelper.Log("Gathering assets");
+            VanillaAssetGatherer.GatherAssets();
+            foreach (SelectableLevel level in StartOfRound.Instance.levels)
+            {
+                DebugHelper.Log($"Gathering assets for scene {level.sceneName}");
+                AssetGather.Instance.AddPlanetPrefabs(level.planetPrefab);
+                level.spawnableMapObjects.ToList().ForEach(e => AssetGather.Instance.AddMapObjects(e.prefabToSpawn));
+                level.spawnableOutsideObjects.ToList().ForEach(e => AssetGather.Instance.AddOutsideObject(e.spawnableObject));
+                level.spawnableScrap.ForEach(e => AssetGather.Instance.AddScrap(e.spawnableItem));
+                AssetGather.Instance.AddLevelAmbiances(level.levelAmbienceClips);
+                level.Enemies.ForEach(e => AssetGather.Instance.AddEnemies(e.enemyType));
+                level.OutsideEnemies.ForEach(e => AssetGather.Instance.AddEnemies(e.enemyType));
+                level.DaytimeEnemies.ForEach(e => AssetGather.Instance.AddEnemies(e.enemyType));
+            }
+        }
+        
         //Called via SceneManager event.
         internal static void OnSceneLoaded(Scene scene, LoadSceneMode loadSceneMode)
         {
@@ -464,6 +491,7 @@ namespace LethalLevelLoader
         [HarmonyPrefix]
         internal static void NetworkSceneManagerLoadScene_Prefix(ref string sceneName)
         {
+            DebugHelper.Log("NetworkSceneManager LoadScene: " + sceneName);
             if (LevelManager.CurrentExtendedLevel == null) return;
             
             if (LevelManager.CurrentExtendedLevel.selectableLevel.sceneName == sceneName)
@@ -474,6 +502,7 @@ namespace LethalLevelLoader
 
                 List<int> sceneSelections = LevelManager.CurrentExtendedLevel.SceneSelections.Select(s => s.Rarity).ToList();
                 int selectedSceneIndex = RoundManager.GetRandomWeightedIndex(sceneSelections.ToArray(), RoundManager.LevelRandom);
+                DebugHelper.Log("Selected SceneIndex: " + selectedSceneIndex + " For ExtendedLevel: " + LevelManager.CurrentExtendedLevel.NumberlessPlanetName);
                 sceneName = LevelManager.CurrentExtendedLevel.SceneSelections[selectedSceneIndex].Name;
                 DebugHelper.Log("Selected SceneName: " +  sceneName + " For ExtendedLevel: " + LevelManager.CurrentExtendedLevel.NumberlessPlanetName);
             }
@@ -502,7 +531,10 @@ namespace LethalLevelLoader
             if (status == GenerationStatus.Complete && !__instance.dungeonCompletedGenerating)
             {
                 __instance.FinishGeneratingLevel();
-                __instance.dungeonGenerator.Generator.OnGenerationStatusChanged -= __instance.Generator_OnGenerationStatusChanged;
+                GenerationStatusDelegate d = Traverse.Create(__instance.dungeonGenerator.Generator).Field("OnGenerationStatusChanged").GetValue() as GenerationStatusDelegate;
+                //__instance.dungeonGenerator.Generator.OnGenerationStatusChanged -= __instance.Generator_OnGenerationStatusChanged;
+                d -= __instance.Generator_OnGenerationStatusChanged;
+                Traverse.Create(__instance.dungeonGenerator.Generator).Field("OnGenerationStatusChanged").SetValue(d);
                 Debug.Log("Dungeon has finished generating on this client after multiple frames");
             }
             return (false);

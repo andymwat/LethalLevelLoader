@@ -43,17 +43,37 @@ namespace LethalLevelLoader
             bool returnBool = true;
 
             if (extendedLevel == null)
+            {
+                DebugHelper.LogError($"Null extendedlevel!");
                 returnBool = false;
+            }
             else if (extendedLevel.selectableLevel == null)
+            {
+                DebugHelper.LogError($"No selectable level found for {extendedLevel.name}!");
                 returnBool = false;
+            }
             else if (string.IsNullOrEmpty(extendedLevel.selectableLevel.sceneName))
+            {
+                DebugHelper.LogError($"No scene name found for {extendedLevel.name}!");
                 returnBool = false;
+            }
             else if (extendedLevel.selectableLevel.planetPrefab == null)
+            {
+                DebugHelper.LogError($"No planet prefab found for {extendedLevel.name}!");
                 returnBool = false;
+            }
             else if (extendedLevel.selectableLevel.planetPrefab.GetComponent<Animator>() == false)
+            {
+                DebugHelper.LogError($"No animator found for {extendedLevel.name}!");
                 returnBool = false;
+            }
             else if (extendedLevel.selectableLevel.planetPrefab.GetComponent<Animator>().runtimeAnimatorController == false)
-                returnBool = false;
+            {
+                DebugHelper.LogError($"No animator controller found for {extendedLevel.name}!");
+                DebugHelper.LogWarning("TODO HACK");
+                //returnBool = true;
+            }
+            
 
             return (returnBool);
         }

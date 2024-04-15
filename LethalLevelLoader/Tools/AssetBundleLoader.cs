@@ -22,6 +22,7 @@ using UnityEngine.SceneManagement;
 using UnityEngine.Windows;
 using static LethalLevelLoader.ExtendedContent;
 using Action = System.Action;
+using UnityEditor.Animations;
 using Debug = UnityEngine.Debug;
 
 namespace LethalLevelLoader
@@ -362,6 +363,29 @@ namespace LethalLevelLoader
                 }
             }
         }
+
+        private static LevelWeatherType ConvertWeatherType(LethalSDK.Utils.LevelWeatherType weatherType)
+        {
+            switch (weatherType)
+            {
+                case LethalSDK.Utils.LevelWeatherType.None:
+                    return LevelWeatherType.None;
+                case LethalSDK.Utils.LevelWeatherType.Eclipsed:
+                    return LevelWeatherType.Eclipsed;
+                case LethalSDK.Utils.LevelWeatherType.Flooded:
+                    return LevelWeatherType.Flooded;
+                case LethalSDK.Utils.LevelWeatherType.Foggy:
+                    return LevelWeatherType.Foggy;
+                case LethalSDK.Utils.LevelWeatherType.Stormy: 
+                    return LevelWeatherType.Stormy;
+                case LethalSDK.Utils.LevelWeatherType.Rainy:
+                    return LevelWeatherType.Rainy;
+                case LethalSDK.Utils.LevelWeatherType.DustClouds:
+                    return LevelWeatherType.DustClouds;
+            }
+
+            return LevelWeatherType.None;
+        }
         
         //Converts a LE module to an ExtendedMod and registers it
         internal static void RegisterExtendedModLEM(ModManifest manifest, AssetBundle bundle)
@@ -378,6 +402,7 @@ namespace LethalLevelLoader
             tempMod.name = manifest.modName;
             tempMod.ModMergeSetting = ModMergeSetting.MatchingAuthorName;
             List<ExtendedItem> items = [];
+            List<ExtendedLevel> levels = [];
             Sprite scrapSprite = AssetGather.Instance.GetScrapSprite();
             foreach (AudioClipInfoPair pair in manifest.assetBank.AudioClips())
             {
@@ -410,9 +435,135 @@ namespace LethalLevelLoader
             foreach( Moon moon in manifest.moons )
             {
                 DebugHelper.LogError($"LLL does not support importing LE moons (skipped {moon.MoonName})");
+                //continue;
+                SelectableLevel selectableLevel = ScriptableObject.CreateInstance<SelectableLevel>();
+                selectableLevel.riskLevel = moon.RiskLevel;
+                selectableLevel.sceneName = moon.MoonName;
+                selectableLevel.maxScrap = moon.MaxScrap;
+                selectableLevel.minScrap = moon.MinScrap;
+                selectableLevel.overrideWeather = moon.OverwriteWeather;
+                selectableLevel.overrideWeatherType = ConvertWeatherType(moon.OverwriteWeatherType);
+                selectableLevel.factorySizeMultiplier = moon.FactorySizeMultiplier;
+                selectableLevel.maxEnemyPowerCount = moon.MaxEnemyPowerCount;
+                selectableLevel.maxOutsideEnemyPowerCount = moon.MaxOutsideEnemyPowerCount;
+                selectableLevel.maxDaytimeEnemyPowerCount = moon.MaxDaytimeEnemyPowerCount;
+                selectableLevel.videoReel = moon.PlanetVideo;
+                selectableLevel.spawnEnemiesAndScrap = moon.SpawnEnemiesAndScrap;
+                selectableLevel.LevelDescription = moon.PlanetDescription;
+                selectableLevel.PlanetName = moon.PlanetName;
+                selectableLevel.planetHasTime = moon.PlanetHasTime;
+                selectableLevel.timeToArrive = moon.TimeToArrive;
+                selectableLevel.levelIncludesSnowFootprints = moon.LevelIncludesSnowFootprints;
+                selectableLevel.spawnProbabilityRange = moon.SpawnProbabilityRange;
+                //selectableLevel.levelAmbienceClips TODO
+                selectableLevel.daytimeEnemiesProbabilityRange = moon.DaytimeEnemiesProbabilityRange;
+                
+                foreach (SpawnableEnemiesPair pair in moon.Enemies())
+                {
+                    DebugHelper.LogWarning($"TODO enemy: {pair.EnemyName}");
+                    continue;
+                    SpawnableEnemyWithRarity enemy = new SpawnableEnemyWithRarity();
+                    enemy.enemyType = AssetGather.Instance.enemies[pair.EnemyName];
+                    enemy.rarity = pair.SpawnWeight;
+                    selectableLevel.Enemies.Add(enemy);
+                }
+                
+                
+                foreach (SpawnableEnemiesPair pair in moon.DaytimeEnemies())
+                {
+                    DebugHelper.LogWarning($"TODO enemy: {pair.EnemyName}");
+                    continue;
+                    SpawnableEnemyWithRarity enemy = new SpawnableEnemyWithRarity();
+                    enemy.enemyType = AssetGather.Instance.enemies[pair.EnemyName];
+                    enemy.rarity = pair.SpawnWeight;
+                    selectableLevel.DaytimeEnemies.Add(enemy);
+                }
+                
+                foreach (SpawnableEnemiesPair pair in moon.OutsideEnemies())
+                {
+                    DebugHelper.LogWarning($"TODO enemy: {pair.EnemyName}");
+                    continue;
+                    SpawnableEnemyWithRarity enemy = new SpawnableEnemyWithRarity();
+                    enemy.enemyType = AssetGather.Instance.enemies[pair.EnemyName];
+                    enemy.rarity = pair.SpawnWeight;
+                    selectableLevel.OutsideEnemies.Add(enemy);
+                }
+
+                List<IntWithRarity> dungeonFlowTypes = new List<IntWithRarity>();
+                foreach (DungeonFlowPair pair in moon.DungeonFlowTypes())
+                {
+                    IntWithRarity intWithRarity = new IntWithRarity();
+                    intWithRarity.id = pair.ID;
+                    intWithRarity.rarity = pair.Rarity;
+                    dungeonFlowTypes.Add(intWithRarity);
+                }
+                selectableLevel.dungeonFlowTypes = dungeonFlowTypes.ToArray();
+
+
+                selectableLevel.daytimeEnemySpawnChanceThroughDay = moon.DaytimeEnemySpawnChanceThroughDay;
+                selectableLevel.enemySpawnChanceThroughoutDay = moon.EnemySpawnChanceThroughoutDay;
+                selectableLevel.outsideEnemySpawnChanceThroughDay = moon.OutsideEnemySpawnChanceThroughDay;
+                
+                
+                List<RandomWeatherWithVariables> weathers = new List<RandomWeatherWithVariables>();
+                foreach (RandomWeatherPair pair in moon.RandomWeatherTypes())
+                {
+                    RandomWeatherWithVariables weather = new RandomWeatherWithVariables();
+                    weather.weatherVariable = pair.WeatherVariable1;
+                    weather.weatherVariable2 = pair.WeatherVariable2;
+                    weather.weatherType = ConvertWeatherType(pair.Weather);
+                    weathers.Add( weather );
+                }
+                selectableLevel.randomWeathers = weathers.ToArray();
+
+                List<SpawnableMapObject> mapObjects = new List<SpawnableMapObject>();
+                foreach (SpawnableMapObjectPair pair in moon.SpawnableMapObjects())
+                {
+                    DebugHelper.LogWarning($"TODO obj: {pair.ObjectName}");
+                    continue;
+                    SpawnableMapObject obj = new SpawnableMapObject();
+                    obj.spawnFacingAwayFromWall = pair.SpawnFacingAwayFromWall;
+                    obj.numberToSpawn = pair.SpawnRate;
+                    obj.prefabToSpawn = AssetGather.Instance.mapObjects[pair.ObjectName];
+                    mapObjects.Add(obj);
+                }
+                selectableLevel.spawnableMapObjects = mapObjects.ToArray();
+
+                List<SpawnableOutsideObjectWithRarity> outsideObjects = new List<SpawnableOutsideObjectWithRarity>();
+                foreach (SpawnableOutsideObjectPair pair in moon.SpawnableOutsideObjects())
+                {
+                    DebugHelper.LogWarning($"TODO obj: {pair.ObjectName}");
+                    continue;
+                    SpawnableOutsideObjectWithRarity obj = new SpawnableOutsideObjectWithRarity();
+                    obj.spawnableObject = AssetGather.Instance.outsideObjects[pair.ObjectName];
+                    obj.randomAmount = pair.SpawnRate;
+                    outsideObjects.Add(obj);
+                }
+                selectableLevel.spawnableOutsideObjects = outsideObjects.ToArray();
+
+                selectableLevel.levelAmbienceClips = null; //TODO AssetGather.Instance.levelAmbiances[moon.LevelAmbienceClips];
+                //TODO HACK
+                selectableLevel.levelAmbienceClips = ScriptableObject.CreateInstance<LevelAmbienceLibrary>();
+                selectableLevel.levelAmbienceClips.name = "Level1TypeAmbience";
+
+                selectableLevel.planetPrefab = moon.MainPrefab;
+                //TODO hack 
+                if( selectableLevel.planetPrefab.GetComponent<Animator>() == null )
+                    selectableLevel.planetPrefab.AddComponent<Animator>();
+                
+                ExtendedLevel extendedLevel = ExtendedLevel.Create(selectableLevel);
+                extendedLevel.name = moon.name;
+                //TerminalManager.CreateLevelTerminalData(extendedLevel, moon.RoutePrice);
+                DebugHelper.Log($"TODO terminal: {moon.MoonName}");
+                extendedLevel.isLocked = moon.IsLocked;
+                extendedLevel.isHidden = moon.IsHidden;
+                extendedLevel.overrideInfoNodeDescription = moon.PlanetDescription;
+                levels.Add( extendedLevel );
+                
             }
 
             tempMod.ExtendedItems = items;
+            tempMod.ExtendedLevels = levels;
 
             RegisterExtendedMod(tempMod);
 

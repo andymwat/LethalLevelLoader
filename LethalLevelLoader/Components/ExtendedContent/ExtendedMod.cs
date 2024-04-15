@@ -16,7 +16,7 @@ namespace LethalLevelLoader
         [field: SerializeField] public ModMergeSetting ModMergeSetting { get; internal set; } = ModMergeSetting.MatchingAuthorName;
 
         [field: SerializeField]
-        public List<ExtendedLevel> ExtendedLevels { get; private set; } = new List<ExtendedLevel>();
+        public List<ExtendedLevel> ExtendedLevels { get; set; } = new List<ExtendedLevel>();
 
         [field: SerializeField]
         public List<ExtendedDungeonFlow> ExtendedDungeonFlows { get; private set; } = new List<ExtendedDungeonFlow>();

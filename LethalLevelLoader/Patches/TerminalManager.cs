@@ -18,7 +18,15 @@ namespace LethalLevelLoader
             get
             {
                 if (_terminal == null)
+                {
+                    
                     _terminal = UnityObjectType.FindObjectOfType<Terminal>();
+                    if (_terminal == null)
+                    {
+                        DebugHelper.LogError("COULD NOT LOAD TERMINAL!");
+                    }
+                }
+                
 
                 return _terminal;
             }

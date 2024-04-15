@@ -129,7 +129,7 @@ namespace LethalLevelLoader
                 selectableLevel.name = NumberlessPlanetName.StripSpecialCharacters() + "Level";
                 if (generateTerminalAssets == true) //Needs to be after levelID setting above.
                 {
-                    //DebugHelper.Log("Generating Terminal Assets For: " + NumberlessPlanetName);
+                    DebugHelper.Log("Generating Terminal Assets For: " + NumberlessPlanetName);
                     TerminalManager.CreateLevelTerminalData(this, routePrice);
                 }
             }

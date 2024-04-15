@@ -10,7 +10,11 @@ using System.IO.Pipes;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using LethalLevelLoader.Tools;
+using LethalSDK.ScriptableObjects;
+using LethalSDK.Utils;
 using TMPro;
+using Unity.Jobs.LowLevel.Unsafe;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
@@ -18,6 +22,7 @@ using UnityEngine.SceneManagement;
 using UnityEngine.Windows;
 using static LethalLevelLoader.ExtendedContent;
 using Action = System.Action;
+using Debug = UnityEngine.Debug;
 
 namespace LethalLevelLoader
 {
@@ -28,6 +33,7 @@ namespace LethalLevelLoader
         internal Plugin pluginInstace;
 
         public const string specifiedFileExtension = "*.lethalbundle";
+        public const string specifiedFileExtensionLEM = "*.lem";
 
         internal static DirectoryInfo lethalLibFile = new DirectoryInfo(Assembly.GetExecutingAssembly().Location);
         internal static DirectoryInfo lethalLibFolder;
@@ -38,7 +44,8 @@ namespace LethalLevelLoader
         public enum LoadingStatus { Inactive, Loading, Complete };
         public static LoadingStatus CurrentLoadingStatus { get; internal set; } = LoadingStatus.Inactive;
 
-        internal static Dictionary<string, AssetBundle> assetBundles = new Dictionary<string, AssetBundle>(); 
+        internal static Dictionary<string, AssetBundle> assetBundles = new Dictionary<string, AssetBundle>();
+        internal static Dictionary<string, AssetBundle> assetBundlesLEM = new Dictionary<string, AssetBundle>();
         internal static Dictionary<string, string> assetBundleLoadTimes = new Dictionary<string, string>();
 
         internal static Dictionary<string, Action<AssetBundle>> onLethalBundleLoadedRequestDictionary = new Dictionary<string, Action<AssetBundle>>();
@@ -126,6 +133,38 @@ namespace LethalLevelLoader
             if (counter == 0)
             {
                 DebugHelper.Log("No Bundles Found!");
+                //CurrentLoadingStatus = LoadingStatus.Complete;
+                //onBundlesFinishedLoading?.Invoke();
+            }
+            
+            //TODO when to get vanilla assets
+            //VanillaAssetGatherer.GatherAssets();
+            
+            DebugHelper.Log("Finding LethalExpansion Modules!");
+
+
+            List<string> files = [..Directory.GetFiles(pluginsFolder.FullName, specifiedFileExtensionLEM, SearchOption.AllDirectories)];
+            //load LE module first
+            string leFile = files.Find(s => s.Contains("lethalexpansion.lem"));
+            DebugHelper.Log($"LEFile: {leFile}");
+            files.Remove( leFile );
+            files.Insert(0, leFile);
+            foreach (string file in files)
+            {
+                
+                DebugHelper.Log($"Loading: {file}");
+                counter++;
+                FileInfo fileInfo = new FileInfo(file);
+                assetBundlesLEM.Add(fileInfo.Name, null);
+                UpdateLoadingBundlesHeaderTextLEM(null);
+
+                //preInitSceneScript.StartCoroutine(Instance.LoadBundle(file, fileInfo.Name));
+                //this.StartCoroutine(Instance.LoadLEM(file, fileInfo.Name));
+                Instance.LoadLEM(file, fileInfo.Name);
+            }
+            if (counter == 0)
+            {
+                DebugHelper.Log("No LEM Modules Found!");
                 CurrentLoadingStatus = LoadingStatus.Complete;
                 onBundlesFinishedLoading?.Invoke();
             }
@@ -189,6 +228,80 @@ namespace LethalLevelLoader
             elapsedMilliseconds = new string(new char[] { elapsedMilliseconds[0], elapsedMilliseconds[1] });
             assetBundleLoadTimes.Add(bundleFile.Substring(bundleFile.LastIndexOf("\\") + 1), elapsedSeconds + "." + elapsedMilliseconds + " Seconds. (" + stopWatch.ElapsedMilliseconds + "ms)");
         }
+        
+        void LoadLEM(string bundleFile, string fileName)
+        {
+            Stopwatch stopWatch = new Stopwatch();
+            stopWatch.Start();
+            FileStream fileStream = new FileStream(Path.Combine(Application.streamingAssetsPath, bundleFile), FileMode.Open, FileAccess.Read);
+            AssetBundle newBundle = AssetBundle.LoadFromFile(Path.Combine(Application.streamingAssetsPath, bundleFile));
+            //AssetBundleCreateRequest newBundleRequest = AssetBundle.LoadFromFileAsync(Path.Combine(Application.streamingAssetsPath, bundleFile));
+            //yield return newBundleRequest;
+
+            //AssetBundle newBundle = newBundleRequest.assetBundle;
+
+            //yield return new WaitUntil(() => newBundle != null);
+
+            if (bundleFile.Contains("lethalexpansion.lem"))
+            {
+                DebugHelper.Log("Got LE bundle");
+                AssetGather.Instance.mainAssetBundle = newBundle;
+            }
+            
+            if (newBundle != null)
+            {
+                DebugHelper.Log("Loading Custom Content From LEM: " + newBundle.name);
+                assetBundlesLEM[fileName] = newBundle;
+
+                if (newBundle.isStreamedSceneAssetBundle == false)
+                {
+                    string bundleName = Path.GetFileNameWithoutExtension(bundleFile).ToLower();
+                    DebugHelper.Log($"Bundle name: {bundleName}");
+                    //string manifestPath = $"Assets/Mods/{bundleName}/ModManifest.asset";
+                    //DebugHelper.Log($"manifestPath: {manifestPath}");
+                    ModManifest[] modManifest = newBundle.LoadAllAssets<ModManifest>();
+                    DebugHelper.Log($"num manifests: {modManifest.Length}");
+                    
+                    //ExtendedMod[] extendedMods = newBundle.LoadAllAssets<ExtendedMod>();
+                    //DebugHelper.Log("Registering First Found ExtendedMod");
+                    if (modManifest.Length > 0)
+                        RegisterExtendedModLEM(modManifest[0], newBundle);
+                    else
+                    {
+                        DebugHelper.LogError("No ModManifest Found In LEM: " + newBundle.name + "!");
+                        //foreach (ExtendedContent extendedContent in newBundle.LoadAllAssets<ExtendedContent>())
+                        //    RegisterNewExtendedContent(extendedContent, newBundle.name);
+                    }
+                }
+
+                onBundleFinishedLoading?.Invoke(newBundle);
+            }
+            else
+            {
+                DebugHelper.LogError("Failed To Load LEM: " + bundleFile);
+                assetBundlesLEM.Remove(fileName);
+                //yield break;
+                return;
+            }
+             
+            if (HaveBundlesFinishedLoading == true)
+            {
+                CurrentLoadingStatus = LoadingStatus.Complete;
+                onBundlesFinishedLoading?.Invoke();
+            }
+            else
+            {
+                
+            }
+
+            fileStream.Close();
+            stopWatch.Stop();
+            TimeSpan timeSpan = TimeSpan.FromMilliseconds(stopWatch.ElapsedMilliseconds);
+            string elapsedSeconds = string.Format("{0:D2}", timeSpan.Seconds);
+            string elapsedMilliseconds = string.Format("{0:D1}", timeSpan.Milliseconds);
+            elapsedMilliseconds = new string(new char[] { elapsedMilliseconds[0], elapsedMilliseconds[1] });
+            assetBundleLoadTimes.Add(bundleFile.Substring(bundleFile.LastIndexOf("\\") + 1), elapsedSeconds + "." + elapsedMilliseconds + " Seconds. (" + stopWatch.ElapsedMilliseconds + "ms)");
+        }
 
         internal static void RegisterExtendedMod(ExtendedMod extendedMod)
         {
@@ -227,7 +340,7 @@ namespace LethalLevelLoader
                     }
                     catch (Exception ex)
                     {
-                        DebugHelper.LogError(ex);
+                        Debug.LogError(ex);
                     }
                 }
             }
@@ -249,7 +362,62 @@ namespace LethalLevelLoader
                 }
             }
         }
+        
+        //Converts a LE module to an ExtendedMod and registers it
+        internal static void RegisterExtendedModLEM(ModManifest manifest, AssetBundle bundle)
+        {
+            
+            DebugHelper.Log("Found ModManifest: " + manifest.modName);
+            List<Scrap> scraps = [..manifest.scraps];
+            List<Moon> moons = [..manifest.moons];
+            
+            
+            ExtendedMod tempMod = ScriptableObject.CreateInstance<ExtendedMod>();
+            tempMod.AuthorName = manifest.author;
+            tempMod.ModName = manifest.modName;
+            tempMod.name = manifest.modName;
+            tempMod.ModMergeSetting = ModMergeSetting.MatchingAuthorName;
+            List<ExtendedItem> items = [];
+            Sprite scrapSprite = AssetGather.Instance.GetScrapSprite();
+            foreach (AudioClipInfoPair pair in manifest.assetBank.AudioClips())
+            {
+                DebugHelper.Log($"Adding audioclip {pair.AudioClipName} : {pair.AudioClipPath}");
+                AssetGather.Instance.AddAudioClip(pair.AudioClipName, bundle.LoadAsset<AudioClip>(pair.AudioClipPath));
+            }
+            foreach (Scrap scrap in manifest.scraps)
+            {
+                DebugHelper.Log($"Adding scrap {scrap.itemName}");
+                VanillaItemInstancer.AddItemToScrap(scrap, scrapSprite);
+                VanillaItemInstancer.UpdateAudio(scrap);
+                Item item = VanillaItemInstancer.GetItem(scrap);
+                AssetGather.Instance.AddScrap( item );
+                
+                ExtendedItem extendedItem = ExtendedItem.Create(item, tempMod, ContentType.Custom);
+                LevelMatchingProperties levelMatchingProperties = ScriptableObject.CreateInstance<LevelMatchingProperties>();
+                foreach (ScrapSpawnChancePerScene chance in scrap.perPlanetSpawnWeight())
+                {
+                    //Fix scene names, LE uses names with numbers
+                    string newSceneName = string.Concat(chance.SceneName.Where(char.IsLetter));
+                    newSceneName = newSceneName.Replace(" ", "");
+                    //TODO "Others" option
+                    //DebugHelper.Log($"Chance for {scrap.itemName} on {newSceneName} is {chance.SpawnWeight}");
+                    levelMatchingProperties.planetNames.Add(new StringWithRarity(newSceneName, chance.SpawnWeight));
+                }
+                extendedItem.SetLevelMatchingProperties(levelMatchingProperties);
+                items.Add( extendedItem );
+                
+            }
+            foreach( Moon moon in manifest.moons )
+            {
+                DebugHelper.LogError($"LLL does not support importing LE moons (skipped {moon.MoonName})");
+            }
 
+            tempMod.ExtendedItems = items;
+
+            RegisterExtendedMod(tempMod);
+
+        }
+        
         internal static void RegisterNewExtendedMod()
         {
 
@@ -697,6 +865,17 @@ namespace LethalLevelLoader
                     loadingBundlesHeaderText.text = "Loading Bundles: " + assetBundles.First().Key + " " + "(" + (assetBundles.Count - (assetBundles.Count - BundlesFinishedLoadingCount)) + " // " + assetBundles.Count + ")";
                 else
                     loadingBundlesHeaderText.text = "Loaded Bundles: " + " (" + (assetBundles.Count - (assetBundles.Count - BundlesFinishedLoadingCount)) + " // " + assetBundles.Count + ")";
+            }
+        }
+        
+        internal static void UpdateLoadingBundlesHeaderTextLEM(AssetBundle _)
+        {
+            if (loadingBundlesHeaderText != null)
+            {
+                if (CurrentLoadingStatus != LoadingStatus.Inactive)
+                    loadingBundlesHeaderText.text = "Loading LEMs: " + assetBundlesLEM.First().Key + " " + "(" + (assetBundlesLEM.Count - (assetBundlesLEM.Count - BundlesFinishedLoadingCount)) + " // " + assetBundlesLEM.Count + ")";
+                else
+                    loadingBundlesHeaderText.text = "Loaded LEMs: " + " (" + (assetBundlesLEM.Count - (assetBundlesLEM.Count - BundlesFinishedLoadingCount)) + " // " + assetBundlesLEM.Count + ")";
             }
         }
 

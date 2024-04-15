@@ -22,7 +22,7 @@ namespace LethalLevelLoader
         public List<ExtendedDungeonFlow> ExtendedDungeonFlows { get; private set; } = new List<ExtendedDungeonFlow>();
 
         [field: SerializeField]
-        public List<ExtendedItem> ExtendedItems { get; private set; } = new List<ExtendedItem>();
+        public List<ExtendedItem> ExtendedItems { get; set; } = new List<ExtendedItem>();
 
         [field: SerializeField]
         public List<ExtendedEnemyType> ExtendedEnemyTypes { get; private set; } = new List<ExtendedEnemyType>();

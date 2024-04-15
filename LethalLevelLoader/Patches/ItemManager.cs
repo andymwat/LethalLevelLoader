@@ -28,6 +28,7 @@ namespace LethalLevelLoader
 
                     int returnRarity = 0;
                     int levelRarity = extendedItem.levelMatchingProperties.GetDynamicRarity(extendedLevel);
+                    //DebugHelper.Log($"Rarity of {extendedItem.Item.itemName} on {extendedLevel.NumberlessPlanetName} is {levelRarity}");
                     //int dungeonRarity
                     returnRarity = levelRarity;
                     if (alreadyInjectedItem != null)

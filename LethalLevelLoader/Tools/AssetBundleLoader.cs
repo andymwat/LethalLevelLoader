@@ -10,6 +10,7 @@ using System.IO.Pipes;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using LethalLevelLoader.Tools;
 using LethalSDK.ScriptableObjects;
 using LethalSDK.Utils;
@@ -59,6 +60,9 @@ namespace LethalLevelLoader
                 foreach (KeyValuePair<string, AssetBundle> assetBundle in assetBundles)
                     if (assetBundle.Value == null)
                         bundlesFinishedLoading = false;
+                foreach (KeyValuePair<string, AssetBundle> assetBundle in assetBundlesLEM)
+                    if (assetBundle.Value == null)
+                        bundlesFinishedLoading = false;
                 return (bundlesFinishedLoading);
             }
         }
@@ -69,6 +73,9 @@ namespace LethalLevelLoader
             {
                 int bundlesFinishedLoading = 0;
                 foreach (KeyValuePair<string, AssetBundle> assetBundle in assetBundles)
+                    if (assetBundle.Value != null)
+                        bundlesFinishedLoading++;
+                foreach (KeyValuePair<string, AssetBundle> assetBundle in assetBundlesLEM)
                     if (assetBundle.Value != null)
                         bundlesFinishedLoading++;
                 return (bundlesFinishedLoading);
@@ -128,7 +135,9 @@ namespace LethalLevelLoader
                 UpdateLoadingBundlesHeaderText(null);
 
                 //preInitSceneScript.StartCoroutine(Instance.LoadBundle(file, fileInfo.Name));
+                DebugHelper.Log($"Starting load of {fileInfo.Name}");
                 this.StartCoroutine(Instance.LoadBundle(file, fileInfo.Name));
+                DebugHelper.Log($"Started load of {fileInfo.Name}");
             }
             if (counter == 0)
             {
@@ -149,6 +158,18 @@ namespace LethalLevelLoader
             DebugHelper.Log($"LEFile: {leFile}");
             files.Remove( leFile );
             files.Insert(0, leFile);
+            
+            //TODO: not all LLL moons will be loaded here, so we can't apply LE scrap to them
+            //Need to do this so that LE scrap can be applied to moons from LLL
+            /*DebugHelper.Log($"Waiting for all LLL bundles to finish loading before loading LEM modules.");
+            while (!HaveBundlesFinishedLoading)
+            {
+                //sleep to give up the CPU
+                Thread.Sleep( 100 );
+                DebugHelper.Log($"Bundles loaded: {BundlesFinishedLoadingCount}/{counter}.");
+            }
+            DebugHelper.Log($"All LLL modules finished loading.");
+            */
             foreach (string file in files)
             {
                 
@@ -160,6 +181,8 @@ namespace LethalLevelLoader
 
                 //preInitSceneScript.StartCoroutine(Instance.LoadBundle(file, fileInfo.Name));
                 //this.StartCoroutine(Instance.LoadLEM(file, fileInfo.Name));
+                
+                //Don't do this as a coroutine, it can cause issues with the load order
                 Instance.LoadLEM(file, fileInfo.Name);
             }
             if (counter == 0)
@@ -235,16 +258,11 @@ namespace LethalLevelLoader
             stopWatch.Start();
             FileStream fileStream = new FileStream(Path.Combine(Application.streamingAssetsPath, bundleFile), FileMode.Open, FileAccess.Read);
             AssetBundle newBundle = AssetBundle.LoadFromFile(Path.Combine(Application.streamingAssetsPath, bundleFile));
-            //AssetBundleCreateRequest newBundleRequest = AssetBundle.LoadFromFileAsync(Path.Combine(Application.streamingAssetsPath, bundleFile));
-            //yield return newBundleRequest;
-
-            //AssetBundle newBundle = newBundleRequest.assetBundle;
-
-            //yield return new WaitUntil(() => newBundle != null);
-
+            
+            //TODO: where to get vanilla content from? Some modules depend on it
             if (bundleFile.Contains("lethalexpansion.lem"))
             {
-                DebugHelper.Log("Got LE bundle");
+                //DebugHelper.Log("Got LE bundle");
                 AssetGather.Instance.mainAssetBundle = newBundle;
             }
             
@@ -256,21 +274,13 @@ namespace LethalLevelLoader
                 if (newBundle.isStreamedSceneAssetBundle == false)
                 {
                     string bundleName = Path.GetFileNameWithoutExtension(bundleFile).ToLower();
-                    DebugHelper.Log($"Bundle name: {bundleName}");
-                    //string manifestPath = $"Assets/Mods/{bundleName}/ModManifest.asset";
-                    //DebugHelper.Log($"manifestPath: {manifestPath}");
                     ModManifest[] modManifest = newBundle.LoadAllAssets<ModManifest>();
-                    DebugHelper.Log($"num manifests: {modManifest.Length}");
                     
-                    //ExtendedMod[] extendedMods = newBundle.LoadAllAssets<ExtendedMod>();
-                    //DebugHelper.Log("Registering First Found ExtendedMod");
                     if (modManifest.Length > 0)
                         RegisterExtendedModLEM(modManifest[0], newBundle);
                     else
                     {
                         DebugHelper.LogError("No ModManifest Found In LEM: " + newBundle.name + "!");
-                        //foreach (ExtendedContent extendedContent in newBundle.LoadAllAssets<ExtendedContent>())
-                        //    RegisterNewExtendedContent(extendedContent, newBundle.name);
                     }
                 }
 
@@ -368,9 +378,6 @@ namespace LethalLevelLoader
         {
             
             DebugHelper.Log("Found ModManifest: " + manifest.modName);
-            List<Scrap> scraps = [..manifest.scraps];
-            List<Moon> moons = [..manifest.moons];
-            
             
             ExtendedMod tempMod = ScriptableObject.CreateInstance<ExtendedMod>();
             tempMod.AuthorName = manifest.author;
@@ -381,12 +388,11 @@ namespace LethalLevelLoader
             Sprite scrapSprite = AssetGather.Instance.GetScrapSprite();
             foreach (AudioClipInfoPair pair in manifest.assetBank.AudioClips())
             {
-                DebugHelper.Log($"Adding audioclip {pair.AudioClipName} : {pair.AudioClipPath}");
                 AssetGather.Instance.AddAudioClip(pair.AudioClipName, bundle.LoadAsset<AudioClip>(pair.AudioClipPath));
             }
             foreach (Scrap scrap in manifest.scraps)
             {
-                DebugHelper.Log($"Adding scrap {scrap.itemName}");
+                DebugHelper.Log($"Adding scrap {scrap.itemName} from mod {manifest.modName}");
                 VanillaItemInstancer.AddItemToScrap(scrap, scrapSprite);
                 VanillaItemInstancer.UpdateAudio(scrap);
                 Item item = VanillaItemInstancer.GetItem(scrap);
@@ -409,7 +415,7 @@ namespace LethalLevelLoader
             }
             foreach( Moon moon in manifest.moons )
             {
-                DebugHelper.LogError($"LLL does not support importing LE moons (skipped {moon.MoonName})");
+                DebugHelper.LogError($"LLL does not support loading LE moons (skipped {moon.MoonName})!");
             }
 
             tempMod.ExtendedItems = items;

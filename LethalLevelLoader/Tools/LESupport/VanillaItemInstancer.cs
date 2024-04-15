@@ -113,7 +113,7 @@ public static class VanillaItemInstancer
             return audioClip;
         }
         
-        DebugHelper.Log($"Could not find {audioClipName}, using default of {defaultAudioClipName}");
+        DebugHelper.LogWarning($"TODO FIXME GetAudioClip: {audioClipName}:{defaultAudioClipName}");
         return AudioClip.Create("default", 1, 1, 44100, false);
         //TODO can't get vanilla assets here yet
         //return AssetGather.Instance.audioClips[defaultAudioClipName];
@@ -139,6 +139,7 @@ public static class VanillaItemInstancer
         }
 
         //TODO
+        DebugHelper.LogWarning($"TODO FIXME GetAudioClips: {audioClipNames}:{defaultAudioClipNames}");
         return [];
         //return defaultAudioClipNames
         //    .Select(audioClipName => AssetGather.Instance.audioClips[audioClipName])
@@ -160,7 +161,7 @@ public static class VanillaItemInstancer
         item.maxValue = scrap.maxValue;
         item.weight = (float)scrap.weight / 100 + 1;
 
-        //TODO
+        //TODO is this even needed?
         //ComponentWhitelist.CheckAndRemoveIllegalComponents(scrap.prefab.transform, ComponentWhitelist.ScrapPrefabComponentWhitelist);
         item.spawnPrefab = scrap.prefab;
 
